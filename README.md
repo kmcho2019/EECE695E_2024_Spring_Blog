@@ -1,8 +1,8 @@
-# EECE695E_2024_Spring_Blog: VeRA: Vector-based Random Matrix Adaptation
+# EECE695E_2024_Spring_Blog: VeRA: Vector-based Random Matrix Adaptation [1]
 EECE695E_2024_Spring_Blog for Efficient Machine Learning Class w/ Sejin Park and Kyumin Cho
 
-## Introduction to LoRA (Low Rank Adaptation) family of PEFT (Parameter Efficient Finetuning)
-Large language Models or LLMs consists of at least billions of parameters. This makes it extremely expensive to train and finetune. For example, the weights of GPT-3 175B can take up to 350GB when stored in FP16 precision (2 bytes per FP16 x 175B=350GB). When training such models additional information such as the optimizer states and gradients are needed. Assuming FP32 training with AdamW optimizer a single weight parameter of the model, it requires 4 bytes to store the weight itself in FP32, 8 bytes per parameter to for the optimizer AdamW (where two states, first moment and second moment in FP32, are maintained for each parameter), and 4 bytes per parameter to store the gradient in FP32. This adds up to 16 bytes of storage space needed for each model parameter required for training. (Source: https://huggingface.co/docs/transformers/v4.20.1/en/perf_train_gpu_one#anatomy-of-models-memory). This means that a full finetune of a small model such as Llama-3 8B can take 128GB (16 bytes x 8B = 128GB) just to store the parameters. This calculation excludes the forward activations as well as the training batch data. This makes even training relatively small models impossible on a single GPU as datacenter-class GPUs such as A100 or H100 max out at 80GB for GPU and especially for consumber level GPUs such as RTX 4090 which only has 24GB.
+## Introduction to LoRA (Low Rank Adaptation) [2] family of PEFT (Parameter Efficient Finetuning)
+Large language Models or LLMs consists of at least billions of parameters. This makes it extremely expensive to train and finetune. For example, the weights of GPT-3 175B can take up to 350GB when stored in FP16 precision (2 bytes per FP16 x 175B=350GB). When training such models additional information such as the optimizer states and gradients are needed. Assuming FP32 training with AdamW optimizer a single weight parameter of the model, it requires 4 bytes to store the weight itself in FP32, 8 bytes per parameter to for the optimizer AdamW (where two states, first moment and second moment in FP32, are maintained for each parameter), and 4 bytes per parameter to store the gradient in FP32. This adds up to 16 bytes of storage space needed for each model parameter required for training. [3] (Source: https://huggingface.co/docs/transformers/v4.20.1/en/perf_train_gpu_one#anatomy-of-models-memory). This means that a full finetune of a small model such as Llama-3 8B can take 128GB (16 bytes x 8B = 128GB) just to store the parameters. This calculation excludes the forward activations as well as the training batch data. This makes even training relatively small models impossible on a single GPU as datacenter-class GPUs such as A100 or H100 max out at 80GB for GPU and especially for consumber level GPUs such as RTX 4090 which only has 24GB.
 
 Not only does the weights needs to be stored on the GPU VRAM during VRAM, each finetune version of the model needs to store the entire modified copy. This means even if mass-storage devices like HDDs are used, it becomes prohibitively impossible to store multiple custom finetune version of the data itself.
 
@@ -42,11 +42,12 @@ Even with parameter efficient nature of LoRA it still requires a non-trivial amo
 ## Extensions
 
 ### DVoRA (DoRA + VeRA)
+DoRA or () [4] is a 
 
 ## Future Avenue of Research
 
 ### Behavior of VeRA compared to LoRA
-In the paper LoRA Learns Less and Forgets Less (https://arxiv.org/abs/2405.09673) the authors claim that LoRA underpeforms full finetuning but, tends to retain the base model performance better on tasks outside of the finetune training data. The authors posits that this is due to the fact that full finetuning tends to fine higher rank weight perturbations compared to LoRA. Considering that VeRA has even fewer tunable parameters and rank of VeRA can be increased more freely compared to LoRA it seems that it would be worthwhile to explore the behavior of VeRA compared to LoRA. The original VeRA paper either used relatively older encoder-based models such as RoBERTa, relatively ocarse evaluations such as GLUE or ROGUE, or relatively simple instruction tuning dataset (Alpaca Cleaned). This paper focuses much more on relevant and challenging LLM tasks such as 
+In the paper *LoRA Learns Less and Forgets Less* [5] the authors claim that LoRA underpeforms full finetuning but, tends to retain the base model performance better on tasks outside of the finetune training data. The authors posits that this is due to the fact that full finetuning tends to fine higher rank weight perturbations compared to LoRA. Considering that VeRA has even fewer tunable parameters and rank of VeRA can be increased more freely compared to LoRA it seems that it would be worthwhile to explore the behavior of VeRA compared to LoRA. The original VeRA paper either used relatively older encoder-based models such as RoBERTa, relatively ocarse evaluations such as GLUE or ROGUE, or relatively simple instruction tuning dataset (Alpaca Cleaned). This paper focuses much more on relevant and challenging LLM tasks such as 
 
 Few of things that can be compared is: 
 - How performance of VeRA fares compared to LoRA and full finetuning on target domain task performance.
@@ -65,8 +66,14 @@ Also, the fact that the rank can be scaled freely in VeRA with not much overhead
 
 
 ### Future universal random weights 
-Platonic model weights hyptohesis. If large fundamental models share a common representation, it is possible that there could be an ideal way to represent the randomized matrix basis on which VeRA operates well in.
+The Platonic Representation Hypothesis [6].... If large fundamental models share a common representation, it is possible that there could be an ideal way to represent the randomized matrix basis on which VeRA operates well in.
 https://arxiv.org/abs/2405.07987 
 
 
 ## References
+[1]: D. J. Kopiczko, T. Blankevoort, and Y. M. Asano, “VERA: Vector-based Random Matrix Adaptation,” arXiv.org, Oct. 17, 2023. https://arxiv.org/abs/2310.11454
+[2]: E. J. Hu et al., “LORA: Low-Rank adaptation of Large Language Models,” arXiv.org, Jun. 17, 2021. https://arxiv.org/abs/2106.09685
+[3]: https://huggingface.co/docs/transformers/v4.20.1/en/perf_train_gpu_one#anatomy-of-models-memory
+[4]: S.-Y. Liu et al., “DORA: Weight-Decomposed Low-Rank Adaptation,” arXiv.org, Feb. 14, 2024. https://arxiv.org/abs/2402.09353
+[5]: D. Biderman et al., “LORA learns less and forgets less,” arXiv.org, May 15, 2024. https://arxiv.org/abs/2405.09673
+[6]: M. Huh, B. Cheung, T. Wang, and P. Isola, “The platonic representation hypothesis,” arXiv.org, May 13, 2024. https://arxiv.org/abs/2405.07987
