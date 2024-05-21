@@ -6,13 +6,28 @@ Large language Models or LLMs consists of at least billions of parameters. This 
 
 Not only does the weights needs to be stored on the GPU VRAM during VRAM, each finetune version of the model needs to store the entire modified copy. This means even if mass-storage devices like HDDs are used, it becomes prohibitively impossible to store multiple custom finetune version of the data itself.
 
-Therefore parameter efficient finetuning or PEFT methods have been developed that is able to finetune and specialize LLMs by only using small amount of parameters, this not only reduces the number of GPUs required to train the model itself, it cuts down on the permanent storage capacity required to store multiple versions of it. The most popular of these approaches is low rank adaptation or LoRA. As its name suggests, this technique uses low-rank tensors to represent large matrices in LLMs. The hidden dimension size in LLMs gets very large with size with GPT-3 175B having a hidden dimension (d) of 12,288. By multiplying two matrices with extremely low rank (as low as 1 or 2), it is possible to represent changes to the large matrix. 
+Therefore parameter efficient finetuning or PEFT methods have been developed that is able to finetune and specialize LLMs by only using small amount of parameters, this not only reduces the number of GPUs required to train the model itself, it cuts down on the permanent storage capacity required to store multiple versions of it. The most popular of these approaches is low rank adaptation or LoRA. As its name suggests, this technique uses low-rank matricess to represent large matrices in LLMs. The hidden dimension size in LLMs gets very large with size with GPT-3 175B having a hidden dimension (d) of 12,288. By multiplying two matrices with extremely low rank (as low as 1 or 2), it is possible to represent a large matrix. By encoding changes to the original weight in this large matrix new versions of the model can be stored with a very small memory footprint.
+
+Let the pre-trained weight matrix be $\(W_o \in \mathbb{R}^{d \times k}\)$.
+
+The modified weight matrix is given by:
+$\[W_o + \Delta W = W_o + BA,\]$
+where $\(B \in \mathbb{R}^{d \times r}\)$, $\(A \in \mathbb{R}^{r \times k}\)$, $\( \text{rank } r \ll \min(d, k)\)$, and $\(\Delta W = BA\)$.
+
+The original forward pass is:
+$\[h = W_o x\]$
+
+The modified forward pass is:
+$\[h = W_o x + \Delta W x = W_o x + BAx\]$
+
+In LoRA, $W_o$ matrix usually corresponds to $W_Q$, $W_K$, $W_V$, or $W_O$, query, key, value, and output projection matrices of attention as opposed to Feed Forward Networks (FFN) matrices as hidden size of FFNs tend to be much larger then projection matrices of attentions.
+
 
 This can be shown in the following diagram.
 (Insert Diagram of LoRA here)
 
 
-Since only the differences to the original model are tracked in training, original model parameters can be frozen and only the small low-rank tensors need to be trained. Gradients or optimizer states don't are not required for the original model, only for the small low-rank tensors, so this greatly reduces the GPU VRAM requirement. Also, when servicing large variations of custom finetune models, only a single copy of the large model needs to be stored and each version only needs to store the small low-rank tensors that represents the difference between the original weights. This makes servicing large number of variations feasible without astronomical cost for each customer.
+Since only the differences to the original model are tracked in training, original model parameters can be frozen and only the small low-rank matricess need to be trained. Gradients or optimizer states don't are not required for the original model, only for the small low-rank matricess, so this greatly reduces the GPU VRAM requirement. Also, when servicing large variations of custom finetune models, only a single copy of the large model needs to be stored and each version only needs to store the small low-rank matricess that represents the difference between the original weights. This makes servicing large number of variations feasible without astronomical cost for each customer.
 
 ## How VeRA works
 Even with parameter efficient nature of LoRA it still requires a non-trivial amount of storage for each version. If a custom version was wanted for each vendor or consumer the storage requirement can easily add up. VeRA tries to take advanatage of random initialization of basis to reduce the number of unique parameters needed for each finetune.
