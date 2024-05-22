@@ -1,31 +1,49 @@
-# EECE695E_2024_Spring_Blog: VeRA: Vector-based Random Matrix Adaptation [[1]](#ref1)
-EECE695E_2024_Spring_Blog for Efficient Machine Learning Class w/ Sejin Park and Kyumin Cho
+# VeRA: Vector-based Random Matrix Adaptation [[1]](#ref1)
+- EECE695E_2024_Spring_Blog for Efficient Machine Learning Class w/ Sejin Park and Kyumin Cho
 
 ## Introduction to LoRA (Low Rank Adaptation) [[2]](#ref2) family of PEFT (Parameter Efficient Finetuning)
-Large language Models or LLMs consists of at least billions of parameters. This makes it extremely expensive to train and finetune. For example, the weights of GPT-3 175B can take up to 350GB when stored in FP16 precision (2 bytes per FP16 x 175B=350GB). When training such models additional information such as the optimizer states and gradients are needed. Assuming FP32 training with AdamW optimizer a single weight parameter of the model, it requires 4 bytes to store the weight itself in FP32, 8 bytes per parameter to for the optimizer AdamW (where two states, first moment and second moment in FP32, are maintained for each parameter), and 4 bytes per parameter to store the gradient in FP32. This adds up to 16 bytes of storage space needed for each model parameter required for training. [[3]](#ref3) This means that a full finetune of a small model such as Llama-3 8B can take 128GB (16 bytes x 8B = 128GB) just to store the parameters. This calculation excludes the forward activations as well as the training batch data. This makes even training relatively small models impossible on a single GPU as datacenter-class GPUs such as A100 or H100 max out at 80GB for GPU and especially for consumber level GPUs such as RTX 4090 which only has 24GB.
+Large language Models or LLMs consists of at least billions of parameters. This makes it extremely expensive to run inference on the model or train and finetune it. For example, the weights of GPT-3 175B can take up to 350GB when stored in FP16 precision (2 bytes per FP16 x 175B=350GB) when used in inference. Training requires storing additional parameters such as the optimizer states and gradients in GPU VRAM in higher precision (FP32). Assuming FP32 training with AdamW optimizer, storing the model weights requires 4 bytes for each parameter in FP32, 8 bytes per parameter to for the optimizer AdamW (where two states, first moment and second moment in FP32, are maintained for each parameter), and 4 bytes per parameter to store the gradient in FP32. This adds up to 16 bytes of storage space needed for each model parameter required for training. [[3]](#ref3) 
 
-Not only does the weights needs to be stored on the GPU VRAM during VRAM, each finetune version of the model needs to store the entire modified copy. This means even if mass-storage devices like HDDs are used, it becomes prohibitively impossible to store multiple custom finetune version of the data itself.
+### Memory Usage Breakdown for Training (FP32 AdamW) [[3]](#ref3) 
+| Component                     | Memory Requirement (bytes)                |
+|-------------------------------|-------------------------------------------|
+| **Model Weights**             |                                           |
+| - fp32 training               | 4 bytes * number of parameters            |
+| **Optimizer States**          |                                           |
+| - AdamW                       | 8 bytes * number of parameters (2 states) |
+| **Gradients**                 | 4 bytes * number of parameters            |
+| **Forward Activations**       | Size depends on sequence length, hidden size, and batch size |
+| **Temporary Buffers**         | Size varies based on specific operations  |
+| **Functionality-specific memory** | Size varies based on additional functionalities |
+| **Total (excluding variable sizes)** | 16 bytes * number of parameters   |
+
+
+
+This means that a full finetune of a small model such as Llama-3 8B can take 128GB (16 bytes x 8B = 128GB) just to store the parameters. This calculation excludes the forward activations as well as the training batch data which mean often higher amount of VRAM capacity is often needed. This makes even training relatively small models impossible on a single GPU as datacenter-class GPUs such as A100 or H100 max out at 80GB and especially difficult for consumer level GPUs such as the RTX 4090 which only has 24GB.
+
+Not only does the weights needs to be stored on the GPU VRAM during VRAM, each finetune version of the model needs to store the entire copy of the model. This means even if mass-storage devices like HDDs are used, it becomes prohibitively impossible to store multiple custom finetune version of the data itself.
 
 Therefore parameter efficient finetuning or PEFT methods have been developed that is able to finetune and specialize LLMs by only using small amount of parameters, this not only reduces the number of GPUs required to train the model itself, it cuts down on the permanent storage capacity required to store multiple versions of it. The most popular of these approaches is low rank adaptation or LoRA. As its name suggests, this technique uses low-rank matricess to represent large matrices in LLMs. The hidden dimension size in LLMs gets very large with size with GPT-3 175B having a hidden dimension (d) of 12,288. By multiplying two matrices with extremely low rank (as low as 1 or 2), it is possible to represent a large matrix. By encoding changes to the original weight in this large matrix new versions of the model can be stored with a very small memory footprint. In the case of GPT-3 175B, the authors of the paper reported reduction as large as 10,000x (from 350GB to 35MB), with rank size of 4 and when being only applied $W_Q$ and $W_V$ projection matrices. This low rank reduction of changes is based on the assumption that the change in weights during finetuning has a low intrinsic rank, based on previous studies [[7]](#ref7) [[8]](#ref8) that claim that learned over-parameterized models reside in the low intrinsic dimension. 
 
 Since only the differences to the original model are tracked in training, original model parameters can be frozen and only the small low-rank matricess need to be trained. Gradients or optimizer states don't are not required for the original model, only for the small low-rank matricess, so this greatly reduces the GPU VRAM requirement. Also, when servicing large variations of custom finetune models, only a single copy of the large model needs to be stored and each version only needs to store the small low-rank matricess that represents the difference between the original weights. This makes servicing large number of variations feasible and makes switching model versions easy as only the small LoRA weights need to be loaded and merged without loading the entire model itself.
 
-Let the pre-trained weight matrix be $\(W_o \in \mathbb{R}^{d \times k}\)$.
+Let the pre-trained weight matrix be $W_o \in \mathbb{R}^{d \times k}$.
 
 The modified weight matrix is given by:
-$\[W_o + \Delta W = W_o + BA,\]$
-where $\(B \in \mathbb{R}^{d \times r}\)$, $\(A \in \mathbb{R}^{r \times k}\)$, $\( \text{rank } r \ll \min(d, k)\)$, and $\(\Delta W = BA\)$.
+
+$W_o + \Delta W = W_o + BA$
+where $B \in \mathbb{R}^{d \times r}$, $A \in \mathbb{R}^{r \times k}$, $\text{rank } r \ll \min(d, k)\$, and $\\Delta W = BA$.
 
 The original forward pass is:
-$\[h = W_o x\]$
+$h = W_o x$
 
 The modified forward pass is:
-$\[h = W_o x + \Delta W x = W_o x + BAx\]$
+$h = W_o x + \Delta W x = W_o x + BAx$
 
 This can be shown in the following diagram.
 (Insert Diagram of LoRA here)
 
-In LoRA, $W_o$ matrix usually corresponds to $W_Q$, $W_K$, $W_V$, or $W_O$, query, key, value, and output projection matrices of attention as opposed to Feed Forward Networks (FFN) matrices as hidden size of FFNs tend to be much larger then projection matrices of attentions. 
+In LoRA, $W_o$ matrix usually corresponds to $W_Q$, $W_K$, $W_V$, or $W_O$, query, key, value, and output projection matrices of attention as opposed to Feed Forward Networks (FFN) matrices as hidden size of FFNs tend to be much larger then projection matrices of attentions. The most common practice seems to be injecting LoRA into query and value though exact implementation can vary widely.
 
 During training $B$ can be initialized as 0 so that $\Delta W = B A$ is also 0 when training starts.
 
@@ -37,9 +55,9 @@ Unlike other PEFT methods such as adapter layer insertion, LoRA adds no addition
 ## How VeRA works
 Even with parameter efficient nature of LoRA it still requires a non-trivial amount of storage for each version. If a custom version was wanted for each vendor or consumer the storage requirement can easily add up. Even for a PEFT technique like LoRA, a finetune version of GPT-3 175B with a low rank of 4 applied to only query and value projections needed several dozen megabytes in storage. If a custom version was to be stored for each users, a million users would amount to dozens of terabytes of storage. This limits the scalability of LoRA for personalization and demands an even more PEFT technique than LoRA which is where VeRA comes in. 
 
-VeRA tries to take advanatage of random matrices and projection to reduce the number of unique parameters needed for each finetune. The idea is to take a pair of randomly initialized matrices and attach a pair of scaling vectors that reparameterize it. The randomly initialized matrices remain frozen while the scaling vectors are trainable. If we use the same keys when generating the random matrices through a PRNG (pseudorandom number generator). We do not need to store the random matrices and only need to store the smaller scaling vectors. This greatly reduces the storage requirement of VeRA and allows larger ranks without drastically increasing the storage requirement.
+VeRA tries to take advanatage of random matrices and projection to reduce the number of unique parameters needed for each finetune. The idea is to take a pair of randomly initialized matrices and attach a pair of scaling vectors that reparameterize it. The randomly initialized matrices remain frozen while the scaling vectors are trainable. If we use the same seed when generating the random matrices through a PRNG (pseudorandom number generator). We do not need to store the random matrices and only need to store the smaller scaling vectors. This greatly reduces the storage requirement of VeRA and allows larger ranks without drastically increasing the storage requirement.
 
-This table taken from [[1]](#ref1) shows the relative storage efficiency of VeRA compared to LoRA. Under the assumption that LoRA and VeRA are applied to the query and key projection layers.
+This table taken from [[1]](#ref1) shows the relative storage efficiency of VeRA compared to LoRA, when only applied to the query and key projection layers.
 | Model | Rank | LoRA - # Trainable Parameters | LoRA - Required Bytes | VeRA - # Trainable Parameters | VeRA - Required Bytes |
 |-------|------|-------------------------------|----------------------|-------------------------------|-----------------------|
 | $\{RoBERTa}_{\text{base}}$  | 1    | 36.8K                         | 144KB                | 18.4K                         | 72KB                  |
@@ -51,6 +69,43 @@ This table taken from [[1]](#ref1) shows the relative storage efficiency of VeRA
 | GPT-3 | 1    | 4.7M                          | 18MB                 | 2.4M                          | 9.1MB                 |
 | GPT-3 | 16   | 75.5M                         | 288MB                | 2.8M                          | 10.5MB                |
 | GPT-3 | 256  | 1207.9M                       | 4.6GB                | 8.7M                          | 33MB                  |
+
+Let the pre-trained weight matrix be $W_o \in \mathbb{R}^{d \times k}$.
+
+(The parameters updated during training are underlined.)
+
+The original LoRA formulation is the following:
+
+$W_o + \Delta W = W_o + \underline{B A}$
+where $B \in \mathbb{R}^{d \times r}$, $A \in \mathbb{R}^{r \times k}$, $\text{rank } r \ll \min(d, k)\$, and $\\Delta W = BA$.
+
+The original forward pass is:
+
+$h = W_o x$
+
+The LoRA forward pass is:
+
+$h = W_o x + \Delta W x = W_o x + \underline{B A} x$
+
+In the case of LoRA low-rank matrices $A$ and $B$ are updated.
+
+For VeRA the following formulation can be used:
+$W_o + \Delta W = W_o + BA = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A $
+
+The VeRA forward pass being:
+$h = W_o x + \Delta W x = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A x$
+
+In the case of VeRA $B$ and $A$ matrices are frozen and randomly initialized. Scaling vectors $b \in \mathbb{R}^{1 \times d}$ and $d \in \mathbb{R}^{1 \times r}$ are trainable, and is denoted as diagonal matrices $\Lambda_d \in \mathbb{R}^{d \times d}$ and $\Lambda_d \in \mathbb{R}^{r \times r}$ in the equations.
+
+Unlike in LoRA, the B and A matrices do not need to be low-rank as their values does not need to be stored, they can always be reproduced with a fixed random seed. Only the small $b$ and $d$ vectors need to be updated.
+
+More precisely the number of trainable parameters with VeRA scales as $L_\text{tuned} \times (d_\text{model} + r)$, where as LoRA scales as $2 \times L_\text{tuned} \times d_\text{model} \times r$. ($L\text{tuned}$ denote the number of finetuned layers and $d_\text{model}$ represents the dimension of the layers.)
+
+This means that LoRA memory size dramatically with the increase of rank, VeRA can increase the rank without incurring much memory footprint.
+
+
+This can be shown in the following figure comparing LoRA and VeRA.
+(Insert Diagram of VeRA vs LoRA here)
 
 
 ## Performance 
@@ -74,7 +129,7 @@ Few of things that can be compared is:
 
 
 ### Better initialization settings
-The initalization scheme used in VeRA is relatively simple. The original VeRA paper does present some exploration and ablation studies of initialization schemes. The authors claim that using both $d$ and $b$ scaling vectors improve performance, using Kaiming uniform initialization for the performance is better, and initializing $d$ vector with $d_init$ set to $10^-1$ or $10^-7$ tends to outperform 1.0. 
+The initalization scheme used in VeRA is relatively simple. The original VeRA paper does present some exploration and ablation studies of initialization schemes. The authors claim that using both $d$ and $b$ scaling vectors improve performance, using Kaiming uniform initialization for the performance is better, and initializing $d$ vector with $d_init$ set to $10^{-1}$ or $10^{-7}$ tends to outperform 1.0. 
 
 But, they are relatively limited and focus on relatively old model (RoBERTa) and coarse benchmarks such as RTE, MRPC, CoLA, and STS-B tasks. Additional experiments on more relevant LLM tasks such as instruction finetuning or continued pretraining could be more insightful as well as more diverse modalities(vision, sound, et cetera). For example, LoRAs have become a popular in diffusion models such as Stable Diffusion as a way of generating custom images. It would be meaningful to explore the behavior and the best settings for VeRA in these type of applications and tasks.
 
