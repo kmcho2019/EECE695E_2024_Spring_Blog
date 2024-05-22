@@ -103,7 +103,9 @@ In the case of VeRA $B$ and $A$ matrices are frozen and randomly initialized. Sc
 Unlike in LoRA, the B and A matrices do not need to be low-rank as their values does not need to be stored, they can always be reproduced with a fixed random seed. Only the small $b$ and $d$ vectors need to be updated.
 During training vector $b$ is set as 0 to keep $\Delta W$ as 0 while vector $d$ is initialized using Kaiming initialization.
 
-More precisely the number of trainable parameters with VeRA scales as $L_\text{tuned} \times (d_\text{model} + r)$, where as LoRA scales as $2 \times L_\text{tuned} \times d_\text{model} \times r$. ($L\text{tuned}$ denote the number of finetuned layers and $d_\text{model}$ represents the dimension of the layers.)
+More precisely the number of trainable parameters with VeRA scales as $L_\text{tuned} \times (d_\text{model} + r)$, whereas LoRA scales as $2 \times L_\text{tuned} \times d_\text{model} \times r$. 
+
+($L_\text{tuned}$ denote the number of finetuned layers and $d_\text{model}$ represents the dimension of the layers.)
 
 This means that LoRA memory size dramatically with the increase of rank, VeRA can increase the rank without incurring much memory footprint.
 
@@ -161,9 +163,19 @@ DoRA by training the magnitude and direction separately attempts to rectify this
 
 As DoRA uses LoRA as-is in its directional component training, [[4]](#ref4) also suggests a new method of PEFT by replacing LoRA with VeRA, named DVoRA. DVoRA merges the advantage of VeRA and DoRA and performs on par or even better than LoRA with fewer trainable parameters.
 
-(Insert LoRA, DVoRA training accuracy here. Figure 4 of DoRA paper)
+#### Average MT-Bench scores graded by GPT-4
+| Model      | PEFT Method   | # Params (%) | Score |
+|------------|---------------|--------------|-------|
+| **LLaMA-7B**   | LoRA          | 2.31         | 5.1   |
+|            | DoRA    | 2.33         | **5.5**   |
+|            | VeRA          | **0.02**         | 4.3   |
+|            | DVoRA   | 0.04         | **5.0**   |
+| **LLaMA2-7B**  | LoRA          | 2.31         | 5.7   |
+|            | DoRA (Ours)   | 2.33         | **6.0**   |
+|            | VeRA          | **0.02**         | 5.5   |
+|            | DVoRA   | 0.04         | **6.0**   |
 
-DoRA paper [[4]](#ref4) is an example of a paper that extends the parameter efficiency of VeRA with its own improvements to create a more performant PEFT algorithm. 
+DoRA paper [[4]](#ref4) is an example of a paper that takes advantage the parameter efficiency of VeRA while incorporating its own improvements to create a more performant PEFT algorithm. 
 
 ## Future Avenue of Research
 
@@ -176,19 +188,34 @@ Few of things that can be compared is:
 - Does sample-efficiency suffers compared to LoRA and full finetuning?
 
 ### NAS (Neural Architecture Search) to VeRA
+LoRA's hyperparamters are rank size, which projection (key, query, value, output) to apply to, and which layer to apply it. But, LoRA's hyperparameters are more strictly bounded by practical constraints as memory overhead grows quickly with rank size. On the other hand, VeRA is less bounded by rank size which makes it more free to explore higher ranks and various configurations.
 
+This relatively wider search space makes VeRA attractive for NAS compared to LoRA. A systemetic approach towards determining which layer to target, which rank to use, and which initial value to use for each application and modality could be an interesting research topic.
+
+This research could also give us a glimpse into how each type of model responds to PEFT tuning. Whereas the original LoRA dealt in relatively limited domains such as encoder-type LLMs, instruction tuning, or image classification. Today, LoRA family of PEFT has been expanded to continued pretraining of LLMs, finetuning diffusion models, customization of LLMs, et cetera. The relative low-overhead and wider search space of VeRA could be useful as a tool for exploring the optimal configuration of LoRA-type PEFT and how each domains works differently.
 
 ### Better initialization settings
 The initalization scheme used in VeRA is relatively simple. The original VeRA paper does present some exploration and ablation studies of initialization schemes. The authors claim that using both $d$ and $b$ scaling vectors improve performance, using Kaiming uniform initialization for the performance is better, and initializing $d$ vector with $d_init$ set to $10^{-1}$ or $10^{-7}$ tends to outperform 1.0. 
 
-But, they are relatively limited and focus on relatively old model (RoBERTa) and coarse benchmarks such as RTE, MRPC, CoLA, and STS-B tasks. Additional experiments on more relevant LLM tasks such as instruction finetuning or continued pretraining could be more insightful as well as more diverse modalities(vision, sound, et cetera). For example, LoRAs have become a popular in diffusion models such as Stable Diffusion as a way of generating custom images. It would be meaningful to explore the behavior and the best settings for VeRA in these type of applications and tasks.
+But, the types of initializations and number of parameters explored are  limited and focus on relatively old model (RoBERTa) and coarse GLUE-based benchmarks such as RTE, MRPC, CoLA, and STS-B tasks. Additional experiments on more relevant LLM tasks such as instruction finetuning or continued pretraining could be more insightful as well as more diverse modalities(vision, sound, et cetera). For example, LoRAs have become a popular in diffusion models such as Stable Diffusion [[9]](#ref9) as a way of generating custom images. It would be meaningful to explore the behavior and the best settings for VeRA in these type of applications and tasks. 
 
-Also, the fact that the rank can be scaled freely in VeRA with not much overhead was underexplored in the original paper. By varying and expanding the rank size to be much greater than what is feasible with LoRA it seems possible that VeRA could have higher rank perturbations compared to LoRA possibly leading to different behaviors. Varying the rank and the initializations of VeRA and comparing the SVD decomposition of VeRA, LoRA, and full finetuning seems like an underexplored topic. How different configurations of VeRA can change the behavior of the weight perturbations or how it relates to performance could be important for exploring how the weight features changes with finetuning. For example, the LoRA Learns Less and Forgets Less paper claims that on full finetuning on code and math the model does not learn low-rank perturbations unlike the original assumptions behind LoRA. Considering that VeRA is able to expand to much higher rank, SVD analysis of VeRA when trained on complex tasks like code and math could yield interesting results.
+Also, the fact that the rank can be scaled freely in VeRA with not much overhead was underexplored in the original paper. By varying and expanding the rank size to be much greater than what is feasible with LoRA it seems possible that VeRA could have higher rank compared to LoRA possibly leading to different behaviors. Varying the rank and the initializations of VeRA and comparing the SVD decomposition of VeRA, LoRA, and full finetuning seems like an underexplored topic. How different configurations of VeRA can change the behavior of the weight perturbations or how it relates to performance could be important for exploring how the weight features changes with finetuning. For example, [[5]](#ref5) claims that on full finetuning on code and math the model does not learn low-rank perturbations unlike the original assumptions behind LoRA. Considering that VeRA is able to expand to much higher rank, SVD analysis of VeRA when trained on complex tasks like code and math could yield interesting results.
 
 
-### Future universal random weights 
-The Platonic Representation Hypothesis [[6]](#ref6).... If large fundamental models share a common representation, it is possible that there could be an ideal way to represent the randomized matrix basis on which VeRA operates well in.
-https://arxiv.org/abs/2405.07987 
+### Universal basis matrices for VeRA
+(Insert Fig1 of Platonic Representation Hypothesis Paper)
+
+The Platonic Representation Hypothesis [[6]](#ref6) claims that representations in AI models are converging across multiple domains. The hypothesis claims that representation learning algorithms attempts to find vector embeddings that statistically model reality through various measurements and projections. The vector embeddings are all derived from reality and becomes more aligned as models become trained on more data and for more tasks. In the paper, authors claim that model alighment increases with performance and even models trained with different modalities (language and vision) tends to converge as performance increases.
+
+If large fundamental models share a common representation, it is possible that there could be an ideal way to represent the randomized matrix basis on which VeRA operates well in. Currently the random $A$ and $B$ matrices are generated relatively arbitrarily. This could suggest a sort of "universal" matrices where VeRA would perform well for all models and domains as models converge on a similar representation. Even if this hypothesis is true in a limited sense this suggests that there could be a family of matrices that can represent the basis($A$ and $B$) for VeRA better. 
+
+Research could attempt to isolate such basis matrices through statistical analysis of various SoTA (state of the art) models and compare against random Gaussian generated matrices. Initially the study could focus on models across a single modality such as vision and expand search for multi-modal models. This could not only lead to a more practical method of generating better performing basis matrices but also validate the Platonic representation hypothesis.
+
+One stumbling block of applying VeRA to this hypothesis is that the hypothesis largely discusses representation while VeRA is about modifying the model weights. However, LoReFT (low-rank linear subspace ReFT) [[10]](#ref10) defines a methodology of finetuning a model by modifying its representations/activations, denoted as h. Using the formula:
+
+$\text{LoREFT}(h) = h + R^{T} (W h + b - R h)$, where $R \in \mathbb{R}^{r \times d}$ and $W \in \mathbb{R}^{r \times d}$ are low rank matrices.
+
+Considering that LoReFT also uses a low-rank matrix to represent trainable changes, VeRA's methodology of using a randomly generated matrices with small vectors seems applicable. This expands the possibility that the hypothesis could be applicable for a LoREFT + VeRA hybrid as well.
 
 
 ## References
@@ -207,5 +234,10 @@ https://arxiv.org/abs/2405.07987
 <a name="ref7"></a>[7]: C. Li, H. Farkhoor, R. Liu, and J. Yosinski, “Measuring the intrinsic dimension of objective landscapes,” arXiv.org, Apr. 24, 2018. https://arxiv.org/abs/1804.08838
 
 <a name="ref8"></a>[8]: A. Aghajanyan, L. Zettlemoyer, and S. Gupta, “Intrinsic dimensionality explains the effectiveness of language model Fine-Tuning,” arXiv.org, Dec. 22, 2020. https://arxiv.org/abs/2012.13255
+
+<a name="ref9"></a>[9]: R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-Resolution Image Synthesis with Latent Diffusion Models,” arXiv.org, Dec. 20, 2021. https://arxiv.org/abs/2112.10752
+
+<a name="ref10"></a>[10]: Z. Wu et al., “REFT: Representation Finetuning for Language Models,” arXiv (Cornell University), Apr. 2024, doi: 10.48550/arxiv.2404.03592.
+
 
 
