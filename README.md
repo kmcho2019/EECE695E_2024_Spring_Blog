@@ -42,7 +42,7 @@ The modified forward pass is:
 $h = W_o x + \Delta W x = W_o x + B A x$
 
 This can be shown in the following diagram.
-(Insert Diagram of LoRA here)
+![LoRA Diagram (Source: LoRA Paper Figure 1)](lora_figure1_20240522_page_1.png)
 
 In LoRA, $W_o$ matrix usually corresponds to $W_Q$, $W_K$, $W_V$, or $W_O$, query, key, value, and output projection matrices of attention as opposed to Feed Forward Networks (FFN) matrices as hidden size of FFNs tend to be much larger then projection matrices of attentions. The most common practice seems to be injecting LoRA into query and value though exact implementation can vary widely.
 
@@ -111,7 +111,8 @@ This means that LoRA memory size dramatically with the increase of rank, VeRA ca
 
 
 This can be shown in the following figure comparing LoRA and VeRA.
-(Insert Diagram of VeRA vs LoRA here)
+![LoRA vs VeRA Figure (Source: VeRA Paper Figure 1)](vera_methods_20240522_page_1.png)
+
 
 
 ## Performance 
@@ -151,12 +152,12 @@ The original VeRA paper [[1]](#ref1) found that VeRA tended to perform relativel
 
 ### DVoRA (DoRA + VeRA)
 
-(Insert diagram of DoRA here.)
+![DoRA Overview Figure (Source: DoRA Paper Figure 1)](dora_meda_20240522_page_1.png)
 
-DoRA (Weight-Decomposed Low_Rank Adaptation) [[4]](#ref4) is a modification on LoRA where the original weight is decomposed to magnitude and direction components to be finetuned with LoRA being used to finetune the direction component. The paper observes that when the weight matrix is decomposed to two separate components, magnitude and direction, LoRA tends to exhibit a proportional relationship between between changes of direction and magnitude whereas full finetuning tends to be more varied with a slight negative relationship. [[4]](#ref4) suggests that this show's LoRA's inability to decouple the changes in the magnitude and the direction. 
+DoRA (Weight-Decomposed Low-Rank Adaptation) [[4]](#ref4) is a modification on LoRA where the original weight is decomposed to magnitude and direction components to be finetuned with LoRA being used to finetune the direction component. The paper observes that when the weight matrix is decomposed to two separate components, magnitude and direction, LoRA tends to exhibit a proportional relationship between between changes of direction and magnitude whereas full finetuning tends to be more varied with a slight negative relationship. [[4]](#ref4) suggests that this show's LoRA's inability to decouple the changes in the magnitude and the direction. 
 
 This relationship is shown in the following diagram. 
-(Insert diagram here.)
+![Magnitude and Direction Change Figure (Source: DoRA Paper Figure 6)](dora_ft_vs_lora_vs_MADoRA_pattern_20240522_page_1.png)
 
 
 DoRA by training the magnitude and direction separately attempts to rectify this deficiency of LoRA. With this modification, [[4]](#ref4) claims that learning capacity and training stability is improved.
@@ -203,7 +204,7 @@ Also, the fact that the rank can be scaled freely in VeRA with not much overhead
 
 
 ### Universal basis matrices for VeRA
-(Insert Fig1 of Platonic Representation Hypothesis Paper)
+![Platonic Representation Hypothesis Figure (Source: Platonic Representation Hypothesis Paper Figure 1)](platonic_rep_less_space_v3_20240522_page_1.png)
 
 The Platonic Representation Hypothesis [[6]](#ref6) claims that representations in AI models are converging across multiple domains. The hypothesis claims that representation learning algorithms attempts to find vector embeddings that statistically model reality through various measurements and projections. The vector embeddings are all derived from reality and becomes more aligned as models become trained on more data and for more tasks. In the paper, authors claim that model alighment increases with performance and even models trained with different modalities (language and vision) tends to converge as performance increases.
 
