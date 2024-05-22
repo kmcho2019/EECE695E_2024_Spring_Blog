@@ -238,6 +238,8 @@ Considering that LoReFT also uses a low-rank matrix to represent trainable chang
 
 <a name="ref9"></a>[9]: R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-Resolution Image Synthesis with Latent Diffusion Models,” arXiv.org, Dec. 20, 2021. https://arxiv.org/abs/2112.10752
 
+<!-- Original source repository can be found here: https://github.com/kmcho2019/EECE695E_2024_Spring_Blog -->
+
 <a name="ref10"></a>[10]: Z. Wu et al., “REFT: Representation Finetuning for Language Models,” arXiv (Cornell University), Apr. 2024, doi: 10.48550/arxiv.2404.03592.
 
 
