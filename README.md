@@ -39,7 +39,7 @@ $h = W_o x$
 
 The modified forward pass is:
 
-$h = W_o x + \Delta W x = W_o x + BAx$
+$h = W_o x + \Delta W x = W_o x + B A x$
 
 This can be shown in the following diagram.
 (Insert Diagram of LoRA here)
@@ -101,6 +101,7 @@ $h = W_o x + \Delta W x = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A 
 In the case of VeRA $B$ and $A$ matrices are frozen and randomly initialized. Scaling vectors $b \in \mathbb{R}^{1 \times d}$ and $d \in \mathbb{R}^{1 \times r}$ are trainable, and is denoted as diagonal matrices $\Lambda_d \in \mathbb{R}^{d \times d}$ and $\Lambda_d \in \mathbb{R}^{r \times r}$ in the equations.
 
 Unlike in LoRA, the B and A matrices do not need to be low-rank as their values does not need to be stored, they can always be reproduced with a fixed random seed. Only the small $b$ and $d$ vectors need to be updated.
+During training vector $b$ is set as 0 to keep $\Delta W$ as 0 while vector $d$ is initialized using Kaiming initialization.
 
 More precisely the number of trainable parameters with VeRA scales as $L_\text{tuned} \times (d_\text{model} + r)$, where as LoRA scales as $2 \times L_\text{tuned} \times d_\text{model} \times r$. ($L\text{tuned}$ denote the number of finetuned layers and $d_\text{model}$ represents the dimension of the layers.)
 
@@ -147,7 +148,22 @@ The original VeRA paper [[1]](#ref1) found that VeRA tended to perform relativel
 ## Extensions
 
 ### DVoRA (DoRA + VeRA)
-DoRA or () [[4]](#ref4) is a 
+
+(Insert diagram of DoRA here.)
+
+DoRA (Weight-Decomposed Low_Rank Adaptation) [[4]](#ref4) is a modification on LoRA where the original weight is decomposed to magnitude and direction components to be finetuned with LoRA being used to finetune the direction component. The paper observes that when the weight matrix is decomposed to two separate components, magnitude and direction, LoRA tends to exhibit a proportional relationship between between changes of direction and magnitude whereas full finetuning tends to be more varied with a slight negative relationship. [[4]](#ref4) suggests that this show's LoRA's inability to decouple the changes in the magnitude and the direction. 
+
+This relationship is shown in the following diagram. 
+(Insert diagram here.)
+
+
+DoRA by training the magnitude and direction separately attempts to rectify this deficiency of LoRA. With this modification, [[4]](#ref4) claims that learning capacity and training stability is improved.
+
+As DoRA uses LoRA as-is in its directional component training, [[4]](#ref4) also suggests a new method of PEFT by replacing LoRA with VeRA, named DVoRA. DVoRA merges the advantage of VeRA and DoRA and performs on par or even better than LoRA with fewer trainable parameters.
+
+(Insert LoRA, DVoRA training accuracy here. Figure 4 of DoRA paper)
+
+DoRA paper [[4]](#ref4) is an example of a paper that extends the parameter efficiency of VeRA with its own improvements to create a more performant PEFT algorithm. 
 
 ## Future Avenue of Research
 
