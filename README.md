@@ -42,7 +42,9 @@ The modified forward pass is:
 {{< katex >}}h = W_o x + \Delta W x = W_o x + B A x{{< katex >}}
 
 This can be shown in the following diagram.
-![LoRA Diagram (Source: LoRA Paper Figure 1)](lora_figure1_20240522_page_1.png)
+<p align="center">
+  <img src="./lora_figure1_20240522_page_1.png" alt="LoRA Diagram (Source: LoRA Paper Figure 1)" width="400"> 
+</p>
 
 In LoRA, {{< katex >}}W_o{{< katex >}} matrix usually corresponds to {{< katex >}}W_Q{{< katex >}}, {{< katex >}}W_K{{< katex >}}, {{< katex >}}W_V{{< katex >}}, or {{< katex >}}W_O{{< katex >}}, query, key, value, and output projection matrices of attention as opposed to Feed Forward Networks (FFN) matrices as hidden size of FFNs tend to be much larger then projection matrices of attentions. The most common practice seems to be injecting LoRA into query and value though exact implementation can vary widely.
 
@@ -110,8 +112,10 @@ More precisely the number of trainable parameters with VeRA scales as {{< katex 
 This means that LoRA memory size dramatically with the increase of rank, VeRA can increase the rank without incurring much memory footprint.
 
 
-This can be shown in the following figure comparing LoRA and VeRA.
-![LoRA vs VeRA Figure (Source: VeRA Paper Figure 1)](vera_methods_20240522_page_1.png)
+This can be shown in the following figure comparing LoRA (left) and VeRA (right).
+<p align="center">
+  <img src="./vera_methods_20240522_page_1.png" alt="LoRA vs VeRA Figure (Source: VeRA Paper Figure 1)" width="750"> 
+</p>
 
 
 
@@ -152,13 +156,16 @@ The original VeRA paper [[1]](#ref1) found that VeRA tended to perform relativel
 
 ### DVoRA (DoRA + VeRA)
 
-![DoRA Overview Figure (Source: DoRA Paper Figure 1)](dora_meda_20240522_page_1.png)
+<p align="center">
+  <img src="./dora_meda_20240522_page_1.png" alt="DoRA Overview Figure (Source: DoRA Paper Figure 1)" width="600"> 
+</p>
 
 DoRA (Weight-Decomposed Low-Rank Adaptation) [[4]](#ref4) is a modification on LoRA where the original weight is decomposed to magnitude and direction components to be finetuned with LoRA being used to finetune the direction component. The paper observes that when the weight matrix is decomposed to two separate components, magnitude and direction, LoRA tends to exhibit a proportional relationship between between changes of direction and magnitude whereas full finetuning tends to be more varied with a slight negative relationship. [[4]](#ref4) suggests that this show's LoRA's inability to decouple the changes in the magnitude and the direction. 
 
-This relationship is shown in the following diagram. 
-![Magnitude and Direction Change Figure (Source: DoRA Paper Figure 6)](dora_ft_vs_lora_vs_MADoRA_pattern_20240522_page_1.png)
-
+This relationship is shown in the following diagram.
+<p align="center">
+  <img src="./dora_ft_vs_lora_vs_MADoRA_pattern_20240522_page_1.png" alt="Magnitude and Direction Change Figure (Source: DoRA Paper Figure 6)" width="800"> 
+</p>
 
 DoRA by training the magnitude and direction separately attempts to rectify this deficiency of LoRA. With this modification, [[4]](#ref4) claims that learning capacity and training stability is improved.
 
@@ -204,7 +211,9 @@ Also, the fact that the rank can be scaled freely in VeRA with not much overhead
 
 
 ### Universal basis matrices for VeRA
-![Platonic Representation Hypothesis Figure (Source: Platonic Representation Hypothesis Paper Figure 1)](platonic_rep_less_space_v3_20240522_page_1.png)
+<p align="center">
+  <img src="./platonic_rep_less_space_v3_20240522_page_1.png" alt="Platonic Representation Hypothesis Figure (Source: Platonic Representation Hypothesis Paper Figure 1)" width="600"> 
+</p>
 
 The Platonic Representation Hypothesis [[6]](#ref6) claims that representations in AI models are converging across multiple domains. The hypothesis claims that representation learning algorithms attempts to find vector embeddings that statistically model reality through various measurements and projections. The vector embeddings are all derived from reality and becomes more aligned as models become trained on more data and for more tasks. In the paper, authors claim that model alighment increases with performance and even models trained with different modalities (language and vision) tends to converge as performance increases.
 
@@ -238,9 +247,6 @@ Considering that LoReFT also uses a low-rank matrix to represent trainable chang
 
 <a name="ref9"></a>[9]: R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-Resolution Image Synthesis with Latent Diffusion Models,” arXiv.org, Dec. 20, 2021. https://arxiv.org/abs/2112.10752
 
-<!-- Original source repository can be found here: https://github.com/kmcho2019/EECE695E_2024_Spring_Blog -->
-
 <a name="ref10"></a>[10]: Z. Wu et al., “REFT: Representation Finetuning for Language Models,” arXiv (Cornell University), Apr. 2024, doi: 10.48550/arxiv.2404.03592.
 
-
-
+<!-- Original source repository can be found here: https://github.com/kmcho2019/EECE695E_2024_Spring_Blog -->
