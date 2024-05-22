@@ -22,35 +22,35 @@ This means that a full finetune of a small model such as Llama-3 8B can take 128
 
 Not only does the weights needs to be stored on the GPU VRAM during VRAM, each finetune version of the model needs to store the entire copy of the model. This means even if mass-storage devices like HDDs are used, it becomes prohibitively impossible to store multiple custom finetune version of the data itself.
 
-Therefore parameter efficient finetuning or PEFT methods have been developed that is able to finetune and specialize LLMs by only using small amount of parameters, this not only reduces the number of GPUs required to train the model itself, it cuts down on the permanent storage capacity required to store multiple versions of it. The most popular of these approaches is low rank adaptation or LoRA. As its name suggests, this technique uses low-rank matricess to represent large matrices in LLMs. The hidden dimension size in LLMs gets very large with size with GPT-3 175B having a hidden dimension (d) of 12,288. By multiplying two matrices with extremely low rank (as low as 1 or 2), it is possible to represent a large matrix. By encoding changes to the original weight in this large matrix new versions of the model can be stored with a very small memory footprint. In the case of GPT-3 175B, the authors of the paper reported reduction as large as 10,000x (from 350GB to 35MB), with rank size of 4 and when being only applied {{< katex >}}W_Q{{< katex >}} and {{< katex >}}W_V{{< katex >}} projection matrices. This low rank reduction of changes is based on the assumption that the change in weights during finetuning has a low intrinsic rank, based on previous studies [[7]](#ref7) [[8]](#ref8) that claim that learned over-parameterized models reside in the low intrinsic dimension. 
+Therefore, parameter efficient finetuning or PEFT methods have been developed that is able to finetune and specialize LLMs by only using small amount of parameters, this not only reduces the number of GPUs required to train the model itself, it cuts down on the permanent storage capacity required to store multiple versions of it. The most popular of these approaches is low rank adaptation or LoRA. As its name suggests, this technique uses low-rank matrices to represent large matrices in LLMs. The hidden dimension size in LLMs gets very large with size with GPT-3 175B having a hidden dimension (d) of 12,288. By multiplying two matrices with extremely low rank (as low as 1 or 2), it is possible to represent a large matrix. By encoding changes to the original weight in this large matrix new versions of the model can be stored with a very small memory footprint. In the case of GPT-3 175B, the authors of the paper reported reduction as large as 10,000x (from 350GB to 35MB), with rank size of 4 and when being only applied {{< katex >}}W_Q{{< /katex >}} and {{< katex >}}W_V{{< /katex >}} projection matrices. This low rank reduction of changes is based on the assumption that the change in weights during finetuning has a low intrinsic rank, based on previous studies [[7]](#ref7) [[8]](#ref8) that claim that learned over-parameterized models reside in the low intrinsic dimension. 
 
-Since only the differences to the original model are tracked in training, original model parameters can be frozen and only the small low-rank matricess need to be trained. Gradients or optimizer states don't are not required for the original model, only for the small low-rank matricess, so this greatly reduces the GPU VRAM requirement. Also, when servicing large variations of custom finetune models, only a single copy of the large model needs to be stored and each version only needs to store the small low-rank matricess that represents the difference between the original weights. This makes servicing large number of variations feasible and makes switching model versions easy as only the small LoRA weights need to be loaded and merged without loading the entire model itself.
+Since only the differences to the original model are tracked in training, original model parameters can be frozen and only the small low-rank matrices need to be trained. Gradients or optimizer states don't are not required for the original model, only for the small low-rank matrices, so this greatly reduces the GPU VRAM requirement. Also, when servicing large variations of custom finetune models, only a single copy of the large model needs to be stored and each version only needs to store the small low-rank matrices that represents the difference between the original weights. This makes servicing large number of variations feasible and makes switching model versions easy as only the small LoRA weights need to be loaded and merged without loading the entire model itself.
 
-Let the pre-trained weight matrix be {{< katex >}}W_o \in \mathbb{R}^{d \times k}{{< katex >}}.
+Let the pre-trained weight matrix be {{< katex >}}W_o \in \mathbb{R}^{d \times k}{{< /katex >}}.
 
 The modified weight matrix is given by:
 
-{{< katex >}}W_o + \Delta W = W_o + BA{{< katex >}}
-where {{< katex >}}B \in \mathbb{R}^{d \times r}{{< katex >}}, {{< katex >}}A \in \mathbb{R}^{r \times k}{{< katex >}}, {{< katex >}}\text{rank } r \ll \min(d, k)\{{< katex >}}, and {{< katex >}}\\Delta W = BA{{< katex >}}.
+{{< katex >}}W_o + \Delta W = W_o + BA{{< /katex >}}
+where {{< katex >}}B \in \mathbb{R}^{d \times r}{{< /katex >}}, {{< katex >}}A \in \mathbb{R}^{r \times k}{{< /katex >}}, {{< katex >}}\text{rank } r \ll \min(d, k)\{{< /katex >}}, and {{< katex >}}\\Delta W = BA{{< /katex >}}.
 
 The original forward pass is:
 
-{{< katex >}}h = W_o x{{< katex >}}
+{{< katex >}}h = W_o x{{< /katex >}}
 
 The modified forward pass is:
 
-{{< katex >}}h = W_o x + \Delta W x = W_o x + B A x{{< katex >}}
+{{< katex >}}h = W_o x + \Delta W x = W_o x + B A x{{< /katex >}}
 
 This can be shown in the following diagram.
 <p align="center">
   <img src="./lora_figure1_20240522_page_1.png" alt="LoRA Diagram (Source: LoRA Paper Figure 1)" width="400"> 
 </p>
 
-In LoRA, {{< katex >}}W_o{{< katex >}} matrix usually corresponds to {{< katex >}}W_Q{{< katex >}}, {{< katex >}}W_K{{< katex >}}, {{< katex >}}W_V{{< katex >}}, or {{< katex >}}W_O{{< katex >}}, query, key, value, and output projection matrices of attention as opposed to Feed Forward Networks (FFN) matrices as hidden size of FFNs tend to be much larger then projection matrices of attentions. The most common practice seems to be injecting LoRA into query and value though exact implementation can vary widely.
+In LoRA, {{< katex >}}W_o{{< /katex >}} matrix usually corresponds to {{< katex >}}W_Q{{< /katex >}}, {{< katex >}}W_K{{< /katex >}}, {{< katex >}}W_V{{< /katex >}}, or {{< katex >}}W_O{{< /katex >}}, query, key, value, and output projection matrices of attention as opposed to Feed Forward Networks (FFN) matrices as hidden size of FFNs tend to be much larger then projection matrices of attentions. The most common practice seems to be injecting LoRA into query and value though exact implementation can vary widely.
 
-During training {{< katex >}}B{{< katex >}} can be initialized as 0 so that {{< katex >}}\Delta W = B A{{< katex >}} is also 0 when training starts.
+During training {{< katex >}}B{{< /katex >}} can be initialized as 0 so that {{< katex >}}\Delta W = B A{{< /katex >}} is also 0 when training starts.
 
-When LoRA weights are deployed the original weights and the LoRA weights can be merged, {{< katex >}}W = W_o + B A {{< katex >}}, before inference proceeds as usual. The original weights can be obtained by subtracting the LoRA weights ({{< katex >}}B A{{< katex >}}).
+When LoRA weights are deployed the original weights and the LoRA weights can be merged, {{< katex >}}W = W_o + B A {{< /katex >}}, before inference proceeds as usual. The original weights can be obtained by subtracting the LoRA weights ({{< katex >}}B A{{< /katex >}}).
 
 Unlike other PEFT methods such as adapter layer insertion, LoRA adds no additional latency after the weights are merged as the forward inference operation is exactly the same and no additional operation needs to be performed. This contributed to the popularity of LoRA as no changes to the inference code needs to be made and only weight merging operations before inference are needed which is relatively quick and easy to perform.
 
@@ -58,56 +58,56 @@ Unlike other PEFT methods such as adapter layer insertion, LoRA adds no addition
 ## How VeRA works
 Even with parameter efficient nature of LoRA it still requires a non-trivial amount of storage for each version. If a custom version was wanted for each vendor or consumer the storage requirement can easily add up. Even for a PEFT technique like LoRA, a finetune version of GPT-3 175B with a low rank of 4 applied to only query and value projections needed several dozen megabytes in storage. If a custom version was to be stored for each users, a million users would amount to dozens of terabytes of storage. This limits the scalability of LoRA for personalization and demands an even more parameter efficient PEFT technique than LoRA which is where VeRA comes in. 
 
-VeRA tries to take advanatage of random matrices and projection to reduce the number of unique parameters needed for each finetune. The idea is to take a pair of randomly initialized matrices and attach a pair of scaling vectors that reparameterize it. The randomly initialized matrices remain frozen while the scaling vectors are trainable. If we use the same seed when generating the random matrices through a PRNG (pseudorandom number generator). We do not need to store the random matrices and only need to store the smaller scaling vectors. This greatly reduces the storage requirement of VeRA and allows larger ranks without drastically increasing the storage requirement.
+VeRA tries to take advantageof random matrices and projection to reduce the number of unique parameters needed for each finetune. The idea is to take a pair of randomly initialized matrices and attach a pair of scaling vectors that reparametrize it. The randomly initialized matrices remain frozen while the scaling vectors are trainable. If we use the same seed when generating the random matrices through a PRNG (pseudorandom number generator). We do not need to store the random matrices and only need to store the smaller scaling vectors. This greatly reduces the storage requirement of VeRA and allows larger ranks without drastically increasing the storage requirement.
 
 This table taken from [[1]](#ref1) shows the relative storage efficiency of VeRA compared to LoRA, when only applied to the query and key projection layers.
 | Model | Rank | LoRA - # Trainable Parameters | LoRA - Required Bytes | VeRA - # Trainable Parameters | VeRA - Required Bytes |
 |-------|------|-------------------------------|----------------------|-------------------------------|-----------------------|
-| {{< katex >}}\{RoBERTa}_{\text{base}}{{< katex >}}  | 1    | 36.8K                         | 144KB                | 18.4K                         | 72KB                  |
-| {{< katex >}}\{RoBERTa}_{\text{base}}{{< katex >}}  | 16   | 589.8K                        | 2MB                  | 18.8K                         | 74KB                  |
-| {{< katex >}}\{RoBERTa}_{\text{base}}{{< katex >}}  | 256  | 9437.1K                       | 36MB                 | 24.5K                         | 96KB                  |
-| {{< katex >}}\{RoBERTa}_{\text{large}}{{< katex >}} | 1    | 98.3K                         | 384KB                | 49.2K                         | 192KB                 |
-| {{< katex >}}\{RoBERTa}_{\text{large}}{{< katex >}} | 16   | 1572.8K                       | 6MB                  | 49.5K                         | 195KB                 |
-| {{< katex >}}\{RoBERTa}_{\text{large}}{{< katex >}} | 256  | 25165.8K                      | 96MB                 | 61.4K                         | 240KB                 |
+| {{< katex >}}\{RoBERTa}_{\text{base}}{{< /katex >}}  | 1    | 36.8K                         | 144KB                | 18.4K                         | 72KB                  |
+| {{< katex >}}\{RoBERTa}_{\text{base}}{{< /katex >}}  | 16   | 589.8K                        | 2MB                  | 18.8K                         | 74KB                  |
+| {{< katex >}}\{RoBERTa}_{\text{base}}{{< /katex >}}  | 256  | 9437.1K                       | 36MB                 | 24.5K                         | 96KB                  |
+| {{< katex >}}\{RoBERTa}_{\text{large}}{{< /katex >}} | 1    | 98.3K                         | 384KB                | 49.2K                         | 192KB                 |
+| {{< katex >}}\{RoBERTa}_{\text{large}}{{< /katex >}} | 16   | 1572.8K                       | 6MB                  | 49.5K                         | 195KB                 |
+| {{< katex >}}\{RoBERTa}_{\text{large}}{{< /katex >}} | 256  | 25165.8K                      | 96MB                 | 61.4K                         | 240KB                 |
 | GPT-3 | 1    | 4.7M                          | 18MB                 | 2.4M                          | 9.1MB                 |
 | GPT-3 | 16   | 75.5M                         | 288MB                | 2.8M                          | 10.5MB                |
 | GPT-3 | 256  | 1207.9M                       | 4.6GB                | 8.7M                          | 33MB                  |
 
-Let the pre-trained weight matrix be {{< katex >}}W_o \in \mathbb{R}^{d \times k}{{< katex >}}.
+Let the pre-trained weight matrix be {{< katex >}}W_o \in \mathbb{R}^{d \times k}{{< /katex >}}.
 
 (The parameters updated during training are underlined.)
 
 The original LoRA formulation is the following:
 
-{{< katex >}}W_o + \Delta W = W_o + \underline{B A}{{< katex >}}
-where {{< katex >}}B \in \mathbb{R}^{d \times r}{{< katex >}}, {{< katex >}}A \in \mathbb{R}^{r \times k}{{< katex >}}, {{< katex >}}\text{rank } r \ll \min(d, k)\{{< katex >}}, and {{< katex >}}\\Delta W = BA{{< katex >}}.
+{{< katex >}}W_o + \Delta W = W_o + \underline{B A}{{< /katex >}}
+where {{< katex >}}B \in \mathbb{R}^{d \times r}{{< /katex >}}, {{< katex >}}A \in \mathbb{R}^{r \times k}{{< /katex >}}, {{< katex >}}\text{rank } r \ll \min(d, k)\{{< /katex >}}, and {{< katex >}}\\Delta W = BA{{< /katex >}}.
 
 The original forward pass is:
 
-{{< katex >}}h = W_o x{{< katex >}}
+{{< katex >}}h = W_o x{{< /katex >}}
 
 The LoRA forward pass is:
 
-{{< katex >}}h = W_o x + \Delta W x = W_o x + \underline{B A} x{{< katex >}}
+{{< katex >}}h = W_o x + \Delta W x = W_o x + \underline{B A} x{{< /katex >}}
 
-In the case of LoRA low-rank matrices {{< katex >}}A{{< katex >}} and {{< katex >}}B{{< katex >}} are updated.
+In the case of LoRA low-rank matrices {{< katex >}}A{{< /katex >}} and {{< katex >}}B{{< /katex >}} are updated.
 
 For VeRA the following formulation can be used:
 
-{{< katex >}}W_o + \Delta W = W_o + BA = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A {{< katex >}}
+{{< katex >}}W_o + \Delta W = W_o + BA = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A {{< /katex >}}
 
 The VeRA forward pass being:
 
-{{< katex >}}h = W_o x + \Delta W x = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A x{{< katex >}}
+{{< katex >}}h = W_o x + \Delta W x = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A x{{< /katex >}}
 
-In the case of VeRA {{< katex >}}B{{< katex >}} and {{< katex >}}A{{< katex >}} matrices are frozen and randomly initialized. Scaling vectors {{< katex >}}b \in \mathbb{R}^{1 \times d}{{< katex >}} and {{< katex >}}d \in \mathbb{R}^{1 \times r}{{< katex >}} are trainable, and is denoted as diagonal matrices {{< katex >}}\Lambda_d \in \mathbb{R}^{d \times d}{{< katex >}} and {{< katex >}}\Lambda_d \in \mathbb{R}^{r \times r}{{< katex >}} in the equations.
+In the case of VeRA {{< katex >}}B{{< /katex >}} and {{< katex >}}A{{< /katex >}} matrices are frozen and randomly initialized. Scaling vectors {{< katex >}}b \in \mathbb{R}^{1 \times d}{{< /katex >}} and {{< katex >}}d \in \mathbb{R}^{1 \times r}{{< /katex >}} are trainable, and is denoted as diagonal matrices {{< katex >}}\Lambda_d \in \mathbb{R}^{d \times d}{{< /katex >}} and {{< katex >}}\Lambda_d \in \mathbb{R}^{r \times r}{{< /katex >}} in the equations.
 
-Unlike in LoRA, the B and A matrices do not need to be low-rank as their values does not need to be stored, they can always be reproduced with a fixed random seed. Only the small {{< katex >}}b{{< katex >}} and {{< katex >}}d{{< katex >}} vectors need to be updated.
-During training vector {{< katex >}}b{{< katex >}} is set as 0 to keep {{< katex >}}\Delta W{{< katex >}} as 0 while vector {{< katex >}}d{{< katex >}} is initialized using Kaiming initialization.
+Unlike in LoRA, the B and A matrices do not need to be low-rank as their values does not need to be stored, they can always be reproduced with a fixed random seed. Only the small {{< katex >}}b{{< /katex >}} and {{< katex >}}d{{< /katex >}} vectors need to be updated.
+During training vector {{< katex >}}b{{< /katex >}} is set as 0 to keep {{< katex >}}\Delta W{{< /katex >}} as 0 while vector {{< katex >}}d{{< /katex >}} is initialized using Kaiming initialization.
 
-More precisely the number of trainable parameters with VeRA scales as {{< katex >}}L_\text{tuned} \times (d_\text{model} + r){{< katex >}}, whereas LoRA scales as {{< katex >}}2 \times L_\text{tuned} \times d_\text{model} \times r{{< katex >}}. 
+More precisely the number of trainable parameters with VeRA scales as {{< katex >}}L_\text{tuned} \times (d_\text{model} + r){{< /katex >}}, whereas LoRA scales as {{< katex >}}2 \times L_\text{tuned} \times d_\text{model} \times r{{< /katex >}}. 
 
-({{< katex >}}L_\text{tuned}{{< katex >}} denote the number of finetuned layers and {{< katex >}}d_\text{model}{{< katex >}} represents the dimension of the layers.)
+({{< katex >}}L_\text{tuned}{{< /katex >}} denote the number of finetuned layers and {{< katex >}}d_\text{model}{{< /katex >}} represents the dimension of the layers.)
 
 This means that LoRA memory size dramatically with the increase of rank, VeRA can increase the rank without incurring much memory footprint.
 
@@ -160,7 +160,7 @@ The original VeRA paper [[1]](#ref1) found that VeRA tended to perform relativel
   <img src="./dora_meda_20240522_page_1.png" alt="DoRA Overview Figure (Source: DoRA Paper Figure 1)" width="600"> 
 </p>
 
-DoRA (Weight-Decomposed Low-Rank Adaptation) [[4]](#ref4) is a modification on LoRA where the original weight is decomposed to magnitude and direction components to be finetuned with LoRA being used to finetune the direction component. The paper observes that when the weight matrix is decomposed to two separate components, magnitude and direction, LoRA tends to exhibit a proportional relationship between between changes of direction and magnitude whereas full finetuning tends to be more varied with a slight negative relationship. [[4]](#ref4) suggests that this show's LoRA's inability to decouple the changes in the magnitude and the direction. 
+DoRA (Weight-Decomposed Low-Rank Adaptation) [[4]](#ref4) is a modification on LoRA where the original weight is decomposed to magnitude and direction components to be finetuned with LoRA being used to finetune the direction component. The paper observes that when the weight matrix is decomposed to two separate components, magnitude and direction, LoRA tends to exhibit a proportional relationship between changes of direction and magnitude whereas full finetuning tends to be more varied with a slight negative relationship. [[4]](#ref4) suggests that this show's LoRA's inability to decouple the changes in the magnitude and the direction. 
 
 This relationship is shown in the following diagram.
 <p align="center">
@@ -188,7 +188,7 @@ DoRA paper [[4]](#ref4) is an example of a paper that takes advantage the parame
 ## Future Avenue of Research
 
 ### Behavior of VeRA compared to LoRA
-In the paper *LoRA Learns Less and Forgets Less* [[5]](#ref5) the authors claim that LoRA underpeforms full finetuning but, tends to retain the base model performance better on tasks outside of the finetune training data. The authors posits that this is due to the fact that full finetuning tends to fine higher rank weight perturbations compared to LoRA. Considering that VeRA has even fewer tunable parameters and rank of VeRA can be increased more freely compared to LoRA it seems that it would be worthwhile to explore the behavior of VeRA compared to LoRA. The original VeRA paper either used relatively older encoder-based models such as RoBERTa, relatively ocarse evaluations such as GLUE or ROGUE, or relatively simple instruction tuning dataset (Alpaca Cleaned). This paper focuses much more on relevant and challenging LLM tasks such as 
+In the paper *LoRA Learns Less and Forgets Less* [[5]](#ref5) the authors claim that LoRA underpeforms full finetuning but, tends to retain the base model performance better on tasks outside of the finetune training data. The authors posits that this is due to the fact that full finetuning tends to find higher rank weight perturbations compared to LoRA. Though VeRA has even fewer tunable parameters than LoRA, the rank of VeRA can be increased more freely compared to LoRA. This contradictory behavior presents an interesting case-study as to how the behavior of VeRA would compare to LoRA in such a scenario presented in [[5]](#ref5). The original VeRA paper either used relatively older encoder-based models such as RoBERTa, relatively coarse evaluations such as GLUE or ROGUE, or relatively simple instruction tuning dataset (Alpaca Cleaned). This paper focuses much more on relevant and challenging LLM tasks such as more complex instruct tuning and continued pretraining in complex domains (math and code).
 
 Few of things that can be compared is: 
 - How performance of VeRA fares compared to LoRA and full finetuning on target domain task performance.
@@ -196,16 +196,16 @@ Few of things that can be compared is:
 - Does sample-efficiency suffers compared to LoRA and full finetuning?
 
 ### NAS (Neural Architecture Search) to VeRA
-LoRA's hyperparamters are rank size, which projection (key, query, value, output) to apply to, and which layer to apply it. But, LoRA's hyperparameters are more strictly bounded by practical constraints as memory overhead grows quickly with rank size. On the other hand, VeRA is less bounded by rank size which makes it more free to explore higher ranks and various configurations.
+LoRA's hyperparameters are rank size, which projection (key, query, value, output) to apply to, and which layer to apply it. But, LoRA's hyperparameters are more strictly bounded by practical constraints as memory overhead grows quickly with rank size. On the other hand, VeRA is less bounded by rank size which makes it more free to explore higher ranks and various configurations.
 
-This relatively wider search space makes VeRA attractive for NAS compared to LoRA. A systemetic approach towards determining which layer to target, which rank to use, and which initial value to use for each application and modality could be an interesting research topic.
+This relatively wider search space makes VeRA attractive for NAS compared to LoRA. A systematic approach towards determining which layer to target, which rank to use, and which initial value to use for each application and modality could be an interesting research topic.
 
 This research could also give us a glimpse into how each type of model responds to PEFT tuning. Whereas the original LoRA dealt in relatively limited domains such as encoder-type LLMs, instruction tuning, or image classification. Today, LoRA family of PEFT has been expanded to continued pretraining of LLMs, finetuning diffusion models, customization of LLMs, et cetera. The relative low-overhead and wider search space of VeRA could be useful as a tool for exploring the optimal configuration of LoRA-type PEFT and how each domains works differently.
 
 ### Better initialization settings
-The initalization scheme used in VeRA is relatively simple. The original VeRA paper does present some exploration and ablation studies of initialization schemes. The authors claim that using both {{< katex >}}d{{< katex >}} and {{< katex >}}b{{< katex >}} scaling vectors improve performance, using Kaiming uniform initialization for the performance is better, and initializing {{< katex >}}d{{< katex >}} vector with {{< katex >}}d_init{{< katex >}} set to {{< katex >}}10^{-1}{{< katex >}} or {{< katex >}}10^{-7}{{< katex >}} tends to outperform 1.0. 
+The initialization scheme used in VeRA is relatively simple. The original VeRA paper does present some exploration and ablation studies of initialization schemes. The authors claim that using both {{< katex >}}d{{< /katex >}} and {{< katex >}}b{{< /katex >}} scaling vectors improve performance, using Kaiming uniform initialization for the performance is better, and initializing {{< katex >}}d{{< /katex >}} vector with {{< katex >}}d_init{{< /katex >}} set to {{< katex >}}10^{-1}{{< /katex >}} or {{< katex >}}10^{-7}{{< /katex >}} tends to outperform 1.0. 
 
-But, the types of initializations and number of parameters explored are  limited and focus on relatively old model (RoBERTa) and coarse GLUE-based benchmarks such as RTE, MRPC, CoLA, and STS-B tasks. Additional experiments on more relevant LLM tasks such as instruction finetuning or continued pretraining could be more insightful as well as more diverse modalities(vision, sound, et cetera). For example, LoRAs have become a popular in diffusion models such as Stable Diffusion [[9]](#ref9) as a way of generating custom images. It would be meaningful to explore the behavior and the best settings for VeRA in these type of applications and tasks. 
+But, the types of initializations and number of parameters explored are limited and focus on relatively old model (RoBERTa) and coarse GLUE-based benchmarks such as RTE, MRPC, CoLA, and STS-B tasks. Additional experiments on more relevant LLM tasks such as instruction finetuning or continued pretraining could be more insightful as well as more diverse modalities(vision, sound, et cetera). For example, LoRAs have become a popular in diffusion models such as Stable Diffusion [[9]](#ref9) as a way of generating custom images. It would be meaningful to explore the behavior and the best settings for VeRA in these type of applications and tasks. 
 
 Also, the fact that the rank can be scaled freely in VeRA with not much overhead was underexplored in the original paper. By varying and expanding the rank size to be much greater than what is feasible with LoRA it seems possible that VeRA could have higher rank compared to LoRA possibly leading to different behaviors. Varying the rank and the initializations of VeRA and comparing the SVD decomposition of VeRA, LoRA, and full finetuning seems like an underexplored topic. How different configurations of VeRA can change the behavior of the weight perturbations or how it relates to performance could be important for exploring how the weight features changes with finetuning. For example, [[5]](#ref5) claims that on full finetuning on code and math the model does not learn low-rank perturbations unlike the original assumptions behind LoRA. Considering that VeRA is able to expand to much higher rank, SVD analysis of VeRA when trained on complex tasks like code and math could yield interesting results.
 
@@ -217,13 +217,13 @@ Also, the fact that the rank can be scaled freely in VeRA with not much overhead
 
 The Platonic Representation Hypothesis [[6]](#ref6) claims that representations in AI models are converging across multiple domains. The hypothesis claims that representation learning algorithms attempts to find vector embeddings that statistically model reality through various measurements and projections. The vector embeddings are all derived from reality and becomes more aligned as models become trained on more data and for more tasks. In the paper, authors claim that model alighment increases with performance and even models trained with different modalities (language and vision) tends to converge as performance increases.
 
-If large fundamental models share a common representation, it is possible that there could be an ideal way to represent the randomized matrix basis on which VeRA operates well in. Currently the random {{< katex >}}A{{< katex >}} and {{< katex >}}B{{< katex >}} matrices are generated relatively arbitrarily. This could suggest a sort of "universal" matrices where VeRA would perform well for all models and domains as models converge on a similar representation. Even if this hypothesis is true in a limited sense this suggests that there could be a family of matrices that can represent the basis({{< katex >}}A{{< katex >}} and {{< katex >}}B{{< katex >}}) for VeRA better. 
+If large fundamental models share a common representation, it is possible that there could be an ideal way to represent the randomized matrix basis on which VeRA operates well in. Currently the random {{< katex >}}A{{< /katex >}} and {{< katex >}}B{{< /katex >}} matrices are generated relatively arbitrarily. This could suggest a sort of "universal" matrices where VeRA would perform well for all models and domains as models converge on a similar representation. Even if this hypothesis is true in a limited sense this suggests that there could be a family of matrices that can represent the basis({{< katex >}}A{{< /katex >}} and {{< katex >}}B{{< /katex >}}) for VeRA better. 
 
 Research could attempt to isolate such basis matrices through statistical analysis of various SoTA (state of the art) models and compare against random Gaussian generated matrices. Initially the study could focus on models across a single modality such as vision and expand search for multi-modal models. This could not only lead to a more practical method of generating better performing basis matrices but also validate the Platonic representation hypothesis.
 
 One stumbling block of applying VeRA to this hypothesis is that the hypothesis largely discusses representation while VeRA is about modifying the model weights. However, LoReFT (low-rank linear subspace ReFT) [[10]](#ref10) defines a methodology of finetuning a model by modifying its representations/activations, denoted as h. Using the formula:
 
-{{< katex >}}\text{LoREFT}(h) = h + R^{T} (W h + b - R h){{< katex >}}, where {{< katex >}}R \in \mathbb{R}^{r \times d}{{< katex >}} and {{< katex >}}W \in \mathbb{R}^{r \times d}{{< katex >}} are low rank matrices.
+{{< katex >}}\text{LoREFT}(h) = h + R^{T} (W h + b - R h){{< /katex >}}, where {{< katex >}}R \in \mathbb{R}^{r \times d}{{< /katex >}} and {{< katex >}}W \in \mathbb{R}^{r \times d}{{< /katex >}} are low rank matrices.
 
 Considering that LoReFT also uses a low-rank matrix to represent trainable changes, VeRA's methodology of using a randomly generated matrices with small vectors seems applicable. This expands the possibility that the hypothesis could be applicable for a LoREFT + VeRA hybrid as well.
 
