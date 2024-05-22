@@ -2,7 +2,7 @@
 - EECE695E_2024_Spring_Blog for Efficient Machine Learning Class w/ Sejin Park and Kyumin Cho
 
 ## Introduction to LoRA (Low Rank Adaptation) [[2]](#ref2) family of PEFT (Parameter Efficient Finetuning)
-Large language Models or LLMs consists of at least billions of parameters. This makes it extremely expensive to run inference on the model or train and finetune it. For example, the weights of GPT-3 175B can take up to 350GB when stored in FP16 precision (2 bytes per FP16 x 175B=350GB) when used in inference. Training requires storing additional parameters such as the optimizer states and gradients in GPU VRAM in higher precision (FP32). Assuming FP32 training with AdamW optimizer, storing the model weights requires 4 bytes for each parameter in FP32, 8 bytes per parameter to for the optimizer AdamW (where two states, first moment and second moment in FP32, are maintained for each parameter), and 4 bytes per parameter to store the gradient in FP32. This adds up to 16 bytes of storage space needed for each model parameter required for training. [[3]](#ref3) 
+Large language Models or LLMs consists of at least billions of parameters. This makes it extremely expensive to run inference on the model or train and finetune it. For example, the weights of GPT-3 175B can take up to 350GB when stored in FP16 precision (2 bytes per FP16 x 175B=350GB) when used in inference. Training requires storing additional parameters such as the optimizer states and gradients in GPU VRAM in higher precision (FP32). Assuming FP32 training with AdamW optimizer, storing the model weights requires 4 bytes for each parameter in FP32, 8 bytes per parameter to for the optimizer AdamW (where two states, first moment and second moment in FP32, are maintained for each parameter), and 4 bytes per parameter to store the gradient in FP32. This adds up to 16 bytes of storage space needed for each model parameter required for training. [[3]](#ref3) This shows that each trainable parameter adds a lot of overhead due to different types of data like optimizer state and gradients that needs to be stored.
 
 ### Memory Usage Breakdown for Training (FP32 AdamW) [[3]](#ref3) 
 | Component                     | Memory Requirement (bytes)                |
@@ -16,7 +16,6 @@ Large language Models or LLMs consists of at least billions of parameters. This 
 | **Temporary Buffers**         | Size varies based on specific operations  |
 | **Functionality-specific memory** | Size varies based on additional functionalities |
 | **Total (excluding variable sizes)** | 16 bytes * number of parameters   |
-
 
 
 This means that a full finetune of a small model such as Llama-3 8B can take 128GB (16 bytes x 8B = 128GB) just to store the parameters. This calculation excludes the forward activations as well as the training batch data which mean often higher amount of VRAM capacity is often needed. This makes even training relatively small models impossible on a single GPU as datacenter-class GPUs such as A100 or H100 max out at 80GB and especially difficult for consumer level GPUs such as the RTX 4090 which only has 24GB.
@@ -35,9 +34,11 @@ $W_o + \Delta W = W_o + BA$
 where $B \in \mathbb{R}^{d \times r}$, $A \in \mathbb{R}^{r \times k}$, $\text{rank } r \ll \min(d, k)\$, and $\\Delta W = BA$.
 
 The original forward pass is:
+
 $h = W_o x$
 
 The modified forward pass is:
+
 $h = W_o x + \Delta W x = W_o x + BAx$
 
 This can be shown in the following diagram.
@@ -53,7 +54,7 @@ Unlike other PEFT methods such as adapter layer insertion, LoRA adds no addition
 
 
 ## How VeRA works
-Even with parameter efficient nature of LoRA it still requires a non-trivial amount of storage for each version. If a custom version was wanted for each vendor or consumer the storage requirement can easily add up. Even for a PEFT technique like LoRA, a finetune version of GPT-3 175B with a low rank of 4 applied to only query and value projections needed several dozen megabytes in storage. If a custom version was to be stored for each users, a million users would amount to dozens of terabytes of storage. This limits the scalability of LoRA for personalization and demands an even more PEFT technique than LoRA which is where VeRA comes in. 
+Even with parameter efficient nature of LoRA it still requires a non-trivial amount of storage for each version. If a custom version was wanted for each vendor or consumer the storage requirement can easily add up. Even for a PEFT technique like LoRA, a finetune version of GPT-3 175B with a low rank of 4 applied to only query and value projections needed several dozen megabytes in storage. If a custom version was to be stored for each users, a million users would amount to dozens of terabytes of storage. This limits the scalability of LoRA for personalization and demands an even more parameter efficient PEFT technique than LoRA which is where VeRA comes in. 
 
 VeRA tries to take advanatage of random matrices and projection to reduce the number of unique parameters needed for each finetune. The idea is to take a pair of randomly initialized matrices and attach a pair of scaling vectors that reparameterize it. The randomly initialized matrices remain frozen while the scaling vectors are trainable. If we use the same seed when generating the random matrices through a PRNG (pseudorandom number generator). We do not need to store the random matrices and only need to store the smaller scaling vectors. This greatly reduces the storage requirement of VeRA and allows larger ranks without drastically increasing the storage requirement.
 
@@ -90,9 +91,11 @@ $h = W_o x + \Delta W x = W_o x + \underline{B A} x$
 In the case of LoRA low-rank matrices $A$ and $B$ are updated.
 
 For VeRA the following formulation can be used:
+
 $W_o + \Delta W = W_o + BA = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A $
 
 The VeRA forward pass being:
+
 $h = W_o x + \Delta W x = W_o + \underline{\Lambda_b} B \underline{\Lambda_d} A x$
 
 In the case of VeRA $B$ and $A$ matrices are frozen and randomly initialized. Scaling vectors $b \in \mathbb{R}^{1 \times d}$ and $d \in \mathbb{R}^{1 \times r}$ are trainable, and is denoted as diagonal matrices $\Lambda_d \in \mathbb{R}^{d \times d}$ and $\Lambda_d \in \mathbb{R}^{r \times r}$ in the equations.
@@ -109,6 +112,37 @@ This can be shown in the following figure comparing LoRA and VeRA.
 
 
 ## Performance 
+The original VeRA paper [[1]](#ref1) found that VeRA tended to perform relatively competitively on various models such as RoBERTa, GPT-2, or on different modalities such as vision while using substantially less trainable parameters.
+
+### RoBERTa Base GLUE benchmarks
+| Method | # Trainable Parameters | SST-2 | MRPC | CoLA | QNLI | RTE | STS-B | Avg. |
+|--------|------------------------|-------|------|------|------|-----|-------|------|
+| Full Finetune     | 125M                   | 94.8  | **90.2** | 63.6 | 92.8 | 78.7| 91.2  | 85.2 |
+| LoRA   | 0.3M                   | **95.1**±0.2 | 89.7±0.7 | 63.4±1.2 | **93.3**±0.3 | **86.6**±0.7 | **91.5**±0.2 | **86.6** |
+| VeRA   | **0.043M**                 | 94.6±0.1 | 89.5±0.5 | **65.6**±0.8 | 91.8±0.2 | 78.7±0.7 | 90.7±0.2 | 85.2 |
+
+### GPT-2 Medium E2E benchmarks
+| Method    | # Trainable Parameters | BLEU  | NIST | METEOR | ROUGE-L | CIDEr |
+|-----------|------------------------|-------|------|--------|---------|-------|
+| FT        | 354.92M                | 68.2  | 8.62 | 46.2   | 71.0    | 2.47  |
+| LoRA      | 0.35M                  | 68.9  | 8.69 | 46.4   | 71.3    | **2.51**  |
+| VeRA      | **0.098M**                 | **70.1**  | **8.81** | **46.6**   | **71.5**    | 2.50  |
+
+### Image classification benchmarks
+| Method       | # Trainable Parameters | CIFAR100 | Food101 | Flowers102 | RESISC45 |
+|--------------|------------------------|----------|---------|------------|----------|
+| **ViT-B**    |                        |          |         |            |          |
+| Head         | -                      | 77.7     | 86.1    | 98.4       | 67.2     |
+| Full         | 85.8M                  | **86.5**     | **90.8**    | 98.9       | **78.9**     |
+| LoRA         | 294.9K                 | 85.9     | 89.9    | 98.8       | 77.7     |
+| **VeRA**     | **24.6K**              | 84.8 | 89.0  | **99.0**   | 77.0 |
+|||||||
+| **ViT-L**    |                        |          |         |            |          |
+| Head         | -                      | 79.4     | 76.5    | 98.9       | 67.8     |
+| Full         | 303.3M                 | 86.8     | 78.7    | 98.8       | **79.0**     |
+| LoRA         | 786.4K                 | 87.0     | **79.5**    | 99.1       | 78.3     |
+| **VeRA**     | **61.4K**              | **87.5** | 79.2 | **99.2**   | 78.6 |
+
 
 ## Extensions
 
